@@ -12,6 +12,7 @@ dependencies = [
     "gradio==6.19.0",
 ]
 
+
 [project.scripts]
 # Launch the Gradio web interface
 detection-gui = "gui:main"
