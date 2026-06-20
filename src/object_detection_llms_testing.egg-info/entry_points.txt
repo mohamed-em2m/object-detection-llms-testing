@@ -1,3 +1,0 @@
-[console_scripts]
-detection-cli = cli:main
-detection-gui = gui:main

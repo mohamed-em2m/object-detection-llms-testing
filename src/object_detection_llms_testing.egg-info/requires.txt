@@ -1,5 +1,0 @@
-gradio>=5.0.0
-json-repair>=0.61.0
-matplotlib>=3.11.0
-openai>=2.43.0
-pillow>=12.2.0

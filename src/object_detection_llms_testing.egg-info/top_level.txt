@@ -1,6 +1,0 @@
-app
-cli
-detection_pipeline
-gui
-llama_server_manager
-prompts
