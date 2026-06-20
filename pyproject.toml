@@ -3,7 +3,7 @@ name = "object-detection-llms-testing"
 version = "0.1.0"
 description = "Interactive test console for assessing Vision-Language Models (VLMs) on general Object Detection tasks"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.12"
 dependencies = [
     "json-repair==0.61.0",
     "matplotlib==3.11.0",
