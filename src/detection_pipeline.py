@@ -32,8 +32,8 @@ from pathlib import Path
 from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
-import matplotlib
-matplotlib.use('Agg')
+import os
+os.environ['MPLBACKEND'] = 'Agg'
 import matplotlib.pyplot as plt
 from openai import OpenAI
 from json_repair import repair_json
