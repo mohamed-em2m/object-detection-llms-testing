@@ -73,11 +73,13 @@ BATCH_CACHE: Dict[str, Dict[str, Any]] = {}
 BATCH_CACHE_LOCK = threading.Lock()
 
 MODEL_PRESETS = [
+   "unsloth/gemma-4-26B-A4B-it-qat-GGUF:UD-Q4_K_XL",
     "unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q2_K_XL",
-    "unsloth/Qwen2.5-VL-7B-Instruct-GGUF",
-    "unsloth/Qwen2.5-VL-72B-Instruct-GGUF",
-    "Qwen/Qwen2.5-VL-7B-Instruct",
-    "Qwen/Qwen2.5-VL-72B-Instruct",
+    
+    "unsloth/gemma-4-31B-it-qat-GGUF:UD-Q4_K_XL",
+    "unsloth/gemma-4-31B-it-GGUF:UD-IQ2_M",
+    "unsloth/Qwen3.6-35B-A3B-MTP-GGUF:UD-Q3_K_M",
+
     "custom",
 ]
 
@@ -829,23 +831,22 @@ def build_app() -> gr.Blocks:
                         categories_input = gr.Textbox(
                             label="Target Categories (comma-separated)",
                             placeholder="person, car, dog",
-                            value="hole, stain, tear, cut, knot, weaving_defect",
+                            value="person, car, bicycle, dog, cat",
                         )
                         category_defs_input = gr.Textbox(
                             label="Category Definitions",
                             placeholder="Write instructions for categories...",
                             lines=4,
-                            value=("- hole: missing fabric\n"
-                                   "- stain: discoloration only\n"
-                                   "- tear: frayed, uneven separation\n"
-                                   "- cut: clean cut\n"
-                                   "- knot: raise lump\n"
-                                   "- weaving_defect: uneven thread density"),
+                            value=("- person: a human being\n"
+                                   "- car: a 4-wheeled motor vehicle\n"
+                                   "- bicycle: a 2-wheeled human-powered vehicle\n"
+                                   "- dog: a domestic canine\n"
+                                   "- cat: a domestic feline"),
                         )
 
                         with gr.Accordion("Pipeline Parameters", open=False):
-                            rounds_slider = gr.Slider(label="Max Rounds",
-                                                      minimum=1, maximum=5, step=1, value=2)
+                            rounds_slider = gr.Slider(label="Optimiztion Max Rounds",
+                                                      minimum=1, maximum=5, step=1, value=1)
                             score_threshold_slider = gr.Slider(
                                 label="Stop Score Threshold (0-10)",
                                 minimum=0, maximum=10, step=1, value=8)
@@ -1019,10 +1020,30 @@ def build_app() -> gr.Blocks:
         )
 
         # Explorer Events
+        # Selecting a new image must do two things: repopulate the Round
+        # dropdown's choices (on_explorer_image_change), AND refresh the
+        # displayed image/score/feedback panels for that new selection
+        # (on_explorer_round_change). These used to be wired as two
+        # independent .change() listeners, relying on the Round dropdown's
+        # own .change() firing after its value was set programmatically —
+        # Gradio does not reliably re-trigger a component's .change() event
+        # from a value update issued by another component's callback, so
+        # picking a new image updated the round list but left the old
+        # image/results on screen. Chaining with .then() guarantees the
+        # refresh runs immediately after the round list is repopulated,
+        # using that same new value.
         explorer_image_select.change(
             on_explorer_image_change,
             inputs=[explorer_image_select, batch_id_state],
             outputs=[explorer_round_select],
+        ).then(
+            on_explorer_round_change,
+            inputs=[explorer_image_select, explorer_round_select,
+                    batch_id_state, show_grid_chk],
+            outputs=[source_image_viewer, best_annotated_viewer,
+                     round_score_display, round_feedback_display,
+                     round_raw_response_display, round_parse_error_display,
+                     detections_json_box],
         )
 
         explorer_round_select.change(
