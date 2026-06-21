@@ -830,18 +830,19 @@ def build_app() -> gr.Blocks:
                         )
                         categories_input = gr.Textbox(
                             label="Target Categories (comma-separated)",
-                            placeholder="person, car, dog",
-                            value="person, car, bicycle, dog, cat",
+                            placeholder="hole, stain, tear, cut, knot, weaving_defect",
+                            value="hole, stain, tear, cut, knot, weaving_defect",
                         )
                         category_defs_input = gr.Textbox(
                             label="Category Definitions",
                             placeholder="Write instructions for categories...",
                             lines=4,
-                            value=("- person: a human being\n"
-                                   "- car: a 4-wheeled motor vehicle\n"
-                                   "- bicycle: a 2-wheeled human-powered vehicle\n"
-                                   "- dog: a domestic canine\n"
-                                   "- cat: a domestic feline"),
+                            value=("- hole: missing fabric\n"
+                                   "- stain: discoloration only\n"
+                                   "- tear: frayed, uneven separation\n"
+                                   "- cut: clean cut\n"
+                                   "- knot: raise lump\n"
+                                   "- weaving_defect: uneven thread density"),
                         )
 
                         with gr.Accordion("Pipeline Parameters", open=False):
