@@ -7,5 +7,6 @@ git clone https://github.com/ggml-org/llama.cpp
 cmake llama.cpp -B llama.cpp/build \
     -DBUILD_SHARED_LIBS=OFF -DGGML_CUDA=ON
 cmake --build llama.cpp/build --config Release -j 24 --clean-first --target llama-cli llama-mtmd-cli llama-server llama-gguf-split
-cp llama.cpp/build/bin/llama-* llama.cpp
-install -m 755 llama.cpp/build/bin/llama-server /usr/local/bin/llama-server
+for bin in llama.cpp/build/bin/*; do
+    [ -f "$bin" ] && install -m 755 "$bin" /usr/local/bin/
+done
