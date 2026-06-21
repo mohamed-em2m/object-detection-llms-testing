@@ -1,5 +1,4 @@
 export CUDA_VISIBLE_DEVICES=0,1  # Use only the first two GPUs
-uv pip install  json-repair openai
 sudo apt-get update
 sudo apt-get install libnvidia-compute-535
 sudo apt-get install libnvidia-compute-535-server
