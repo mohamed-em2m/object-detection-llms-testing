@@ -226,19 +226,51 @@ def pil_to_data_uri(img: Image.Image, fmt: str = "JPEG") -> str:
 # Parsing & validation
 # ---------------------------------------------------------------------------
 
+def _strip_think_blocks(text: str) -> str:
+    """Remove <think>...</think> blocks emitted by thinking-mode models."""
+    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
+
 def _strip_code_fences(text: str) -> str:
+    """Recursively strip markdown code fences (``` … ```) from text."""
     text = text.strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
-        text = re.sub(r"```$", "", text.strip())
-    return text.strip()
+    # Handle fences that may have a language tag on the opening line
+    changed = True
+    while changed:
+        new = re.sub(r"^```[a-zA-Z]*\r?\n?(.*?)```\s*$", r"\1", text, flags=re.DOTALL)
+        new = new.strip()
+        changed = new != text
+        text = new
+    return text
+
+
+def _extract_balanced_array(text: str) -> str:
+    """
+    Find the outermost JSON array in *text* by scanning for balanced brackets.
+    Returns the matched substring, or *text* unchanged if no array is found.
+    This is more robust than ``text[find('['):rfind(']')+1]`` because it
+    won't be tricked by judge-feedback text that also contains ``[…]`` spans.
+    """
+    depth = 0
+    start = None
+    for i, ch in enumerate(text):
+        if ch == "[":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "]":
+            if depth > 0:
+                depth -= 1
+            if depth == 0 and start is not None:
+                return text[start: i + 1]
+    return text
 
 
 def extract_json_block(text: str) -> str:
     """Best-effort extraction of a JSON array from free-form model text."""
     text = _strip_code_fences(text)
-    if "[" in text and "]" in text:
-        return text[text.find("["): text.rfind("]") + 1]
+    if "[" in text:
+        return _extract_balanced_array(text)
     return text
 
 
@@ -248,18 +280,39 @@ def parse_detections(raw_text: str) -> list[dict]:
     Raises ValueError (with the offending text attached) on failure so callers
     can log/inspect it instead of silently losing the round's output.
     """
-    answer_match = re.search(r"<answer>(.*?)</answer>", raw_text, re.DOTALL)
-    candidate = answer_match.group(1) if answer_match else raw_text
+    # 1. Strip thinking blocks so they don't confuse the extractors
+    cleaned = _strip_think_blocks(raw_text)
+
+    # 2. Prefer the content inside <answer>…</answer> tags
+    answer_match = re.search(r"<answer>(.*?)</answer>", cleaned, re.DOTALL)
+    candidate = answer_match.group(1).strip() if answer_match else cleaned
+
+    # 3. Strip any remaining code fences and extract a balanced JSON array
     json_block = extract_json_block(candidate)
 
     try:
         repaired = repair_json(json_block)
         parsed = json.loads(repaired)
     except Exception as exc:
-        raise ValueError(f"Could not parse detections JSON: {exc}\nRaw text was:\n{raw_text}") from exc
+        raise ValueError(
+            f"Could not parse detections JSON: {exc}\nRaw text was:\n{raw_text}"
+        ) from exc
+
+    # Some models wrap the list in a dict, e.g. {"detections": [...]}
+    if isinstance(parsed, dict):
+        for key in ("detections", "objects", "results", "items", "data"):
+            if isinstance(parsed.get(key), list):
+                parsed = parsed[key]
+                break
+        else:
+            # Last resort: take the first list-valued field
+            for v in parsed.values():
+                if isinstance(v, list):
+                    parsed = v
+                    break
 
     if not isinstance(parsed, list):
-        raise ValueError(f"Expected a JSON array of detections, got: {type(parsed)}")
+        raise ValueError(f"Expected a JSON array of detections, got: {type(parsed).__name__}")
     return parsed
 
 
