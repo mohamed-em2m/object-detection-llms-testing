@@ -404,7 +404,14 @@ def run_batch_detection_gui(image_files, categories_str, category_definitions,
                             max_rounds, score_threshold,
                             detector_temp, judge_temp,
                             concurrency,
-                            customize_prompts, detector_template, judge_template):
+                            customize_prompts, detector_template, judge_template,
+                            prep_enabled, prep_short_edge, prep_pad_square,
+                            prep_contrast_method, prep_gamma,
+                            prep_denoise_method, prep_sharpen,
+                            prep_white_balance, prep_grid_style,
+                            prep_som_enabled, prep_tiling_enabled,
+                            prep_tile_size, prep_tile_overlap,
+                            prep_crop_verify_enabled, prep_crop_padding):
     pipeline_cancel_event.clear()
 
     if not image_files:
@@ -486,6 +493,37 @@ def run_batch_detection_gui(image_files, categories_str, category_definitions,
     run_dir = Path("./gui_runs") / f"run_{batch_id}"
     run_dir.mkdir(parents=True, exist_ok=True)
 
+    # Build preprocessing config
+    if not prep_enabled:
+        prep_config = {
+            "resolution_enabled": False,
+            "contrast_method": "none",
+            "denoise_method": "none",
+            "som_enabled": False,
+            "tiling_enabled": False,
+            "crop_verify_enabled": False,
+            "grid_style": "standard",
+        }
+    else:
+        prep_config = {
+            "resolution_enabled": True,
+            "target_short_edge": int(prep_short_edge),
+            "pad_to_square": prep_pad_square,
+            "contrast_method": prep_contrast_method,
+            "clip_limit": 2.0,
+            "gamma": float(prep_gamma),
+            "denoise_method": prep_denoise_method,
+            "sharpen": prep_sharpen,
+            "white_balance": prep_white_balance,
+            "grid_style": prep_grid_style if prep_grid_style != "Standard Red" else "standard",
+            "som_enabled": prep_som_enabled,
+            "tiling_enabled": prep_tiling_enabled,
+            "tile_size": int(prep_tile_size),
+            "tile_overlap": float(prep_tile_overlap) / 100.0,
+            "crop_verify_enabled": prep_crop_verify_enabled,
+            "crop_padding": float(prep_crop_padding) / 100.0,
+        }
+
     batch_results: Dict[str, Any] = {}
     _cache_put(batch_id, batch_results)
     results_lock = threading.Lock()
@@ -546,6 +584,7 @@ def run_batch_detection_gui(image_files, categories_str, category_definitions,
                 api_retries=3,
                 detector_temperature=detector_temp, detector_top_p=0.95,
                 judge_temperature=judge_temp,
+                preprocessing_config=prep_config,
             )
 
             best, _history = pipeline.run(
@@ -955,6 +994,91 @@ def build_app() -> gr.Blocks:
                                 label="Judge Temperature",
                                 minimum=0.0, maximum=1.5, step=0.05, value=0.2)
 
+                        with gr.Accordion("Image Preprocessing & Augmentation", open=False):
+                            prep_enabled_chk = gr.Checkbox(
+                                label="Enable Preprocessing",
+                                value=False,
+                                info="Master toggle for all preprocessing steps below."
+                            )
+                            
+                            with gr.Group(visible=False) as prep_options_group:
+                                gr.HTML("<div style='font-weight:bold;margin-top:8px;'>Resolution & Padding</div>")
+                                prep_short_edge_slider = gr.Slider(
+                                    label="Target Short Edge (px)",
+                                    minimum=512, maximum=2048, step=128, value=1024,
+                                    info="Upscale short edge to at least this value."
+                                )
+                                prep_pad_square_chk = gr.Checkbox(
+                                    label="Pad to Square",
+                                    value=False,
+                                    info="Pad with neutral gray to maintain aspect ratio on square inputs."
+                                )
+                                
+                                gr.HTML("<div style='font-weight:bold;margin-top:8px;'>Contrast & Color</div>")
+                                prep_contrast_dropdown = gr.Dropdown(
+                                    label="Contrast Correction Method",
+                                    choices=["none", "clahe", "autocontrast"],
+                                    value="none"
+                                )
+                                prep_gamma_slider = gr.Slider(
+                                    label="Gamma Correction",
+                                    minimum=0.5, maximum=2.0, step=0.05, value=1.0
+                                )
+                                prep_wb_chk = gr.Checkbox(
+                                    label="Gray World White Balance Correction",
+                                    value=False
+                                )
+                                
+                                gr.HTML("<div style='font-weight:bold;margin-top:8px;'>Noise & Sharpness</div>")
+                                prep_denoise_dropdown = gr.Dropdown(
+                                    label="Denoising Filter",
+                                    choices=["none", "bilateral", "nlm"],
+                                    value="none"
+                                )
+                                prep_sharpen_chk = gr.Checkbox(
+                                    label="Apply Unsharp Mask (Sharpen)",
+                                    value=False
+                                )
+                                
+                                gr.HTML("<div style='font-weight:bold;margin-top:8px;'>Visual Prompting & Coordinate Grid</div>")
+                                prep_grid_dropdown = gr.Dropdown(
+                                    label="Coordinate Grid Overlay Style",
+                                    choices=["Standard Red", "transparent", "fine", "none"],
+                                    value="Standard Red",
+                                    info="Select standard, semi-transparent, fine 10x10 grid, or disable grid overlay."
+                                )
+                                prep_som_chk = gr.Checkbox(
+                                    label="Enable Set-of-Mark (SoM) Prompting",
+                                    value=False,
+                                    info="Detect candidate regions and overlay numbered circles as hints."
+                                )
+                                
+                                gr.HTML("<div style='font-weight:bold;margin-top:8px;'>Tiling (Small Objects)</div>")
+                                prep_tiling_chk = gr.Checkbox(
+                                    label="Enable Image Tiling",
+                                    value=False,
+                                    info="Split image into overlapping tiles, detect independently, and merge using NMS."
+                                )
+                                prep_tile_size_slider = gr.Slider(
+                                    label="Tile Size (px)",
+                                    minimum=256, maximum=1024, step=128, value=512
+                                )
+                                prep_tile_overlap_slider = gr.Slider(
+                                    label="Tile Overlap (%)",
+                                    minimum=0, maximum=50, step=5, value=20
+                                )
+                                
+                                gr.HTML("<div style='font-weight:bold;margin-top:8px;'>Multi-Pass Crop & Verify</div>")
+                                prep_cv_chk = gr.Checkbox(
+                                    label="Enable Crop & Verify Validation",
+                                    value=False,
+                                    info="Perform second VLM validation pass on cropped detections with context buffer."
+                                )
+                                prep_cv_padding_slider = gr.Slider(
+                                    label="Crop Context Padding (%)",
+                                    minimum=0, maximum=50, step=5, value=15
+                                )
+
                         with gr.Accordion("External API (Optional)", open=False) as ext_api_group:
                             use_external_api_chk = gr.Checkbox(
                                 label="Use External API instead of Local Server",
@@ -1079,6 +1203,12 @@ def build_app() -> gr.Blocks:
         # Cross-component wiring
         # -------------------------------------------------------------------
 
+        prep_enabled_chk.change(
+            lambda v: gr.update(visible=v),
+            inputs=[prep_enabled_chk],
+            outputs=[prep_options_group],
+        )
+
         use_external_api_chk.change(
             toggle_external_api,
             inputs=[use_external_api_chk],
@@ -1111,6 +1241,13 @@ def build_app() -> gr.Blocks:
                 det_temp_slider, jdg_temp_slider,
                 concurrency_slider,
                 customize_prompts_chk, custom_det_prompt, custom_jdg_prompt,
+                prep_enabled_chk, prep_short_edge_slider, prep_pad_square_chk,
+                prep_contrast_dropdown, prep_gamma_slider,
+                prep_denoise_dropdown, prep_sharpen_chk,
+                prep_wb_chk, prep_grid_dropdown,
+                prep_som_chk, prep_tiling_chk,
+                prep_tile_size_slider, prep_tile_overlap_slider,
+                prep_cv_chk, prep_cv_padding_slider,
             ],
             outputs=[
                 pipeline_status, progress_html,
